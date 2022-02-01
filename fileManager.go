@@ -17,7 +17,8 @@ const lastElemPos = 24
 
 func main() {
 
-	RunProgram(`D:\Games\`)
+	RunProgram(`D:\Games`)
+	fmt.Println("saved?")
 
 }
 
@@ -36,7 +37,6 @@ func RunProgram(startDir string) {
 		if key == keyboard.KeyArrowLeft {
 			back := ReadFiles(goBack(startDir))
 			startDir = strings.TrimRight(filepath.Dir(startDir), `\`)
-
 			mainDir = back
 			selected = mainDir[0].Name()
 			position = 0
@@ -117,7 +117,6 @@ func RunProgram(startDir string) {
 
 		if key == keyboard.KeyArrowRight {
 			currentDir := returnDirectory(startDir)
-			currentDirAsStrings := ReadFiles(startDir)
 			forward := ReadFiles(goForward(startDir, selected))
 			mainDir = forward
 			if len(mainDir) > 0 {
@@ -131,27 +130,66 @@ func RunProgram(startDir string) {
 					PrintDir(mainDir, selected, 0, lastElemPos)
 				}
 			} else {
-				selectedIndex := IndexOf(currentDirAsStrings, selected)
+				selectedIndex := IndexOf(currentDir, selected)
 				if selectedIndex != -1 && currentDir[selectedIndex].IsDir() {
+					fmt.Print("\033[H\033[2J")
+					fmt.Println(startDir + `\` + selected)
 					startDir = startDir + `\` + selected
 					selected = ""
 					position = 0
 					startPos = 0
-					fmt.Print("\033[H\033[2J")
 					fmt.Println("empty")
 				}
 				if selectedIndex != -1 && !currentDir[selectedIndex].IsDir() {
 					fmt.Print("\033[H\033[2J")
+					startDir = startDir + `\` + selected
 					fmt.Println("Can't open")
 				}
 			}
 		}
 
 		if key == keyboard.KeyCtrlN {
-			err := os.Mkdir(`D:\Games\`+ReadText(), 0755)
+
+			folderName := ReadText()
+			if len(folderName) < 1 {
+				folderName = "New Folder"
+			}
+			err := os.Mkdir(startDir+`\`+folderName, 0755)
 			if err != nil {
 				log.Fatal(err)
 			}
+			selected = folderName
+			mainDir = ReadFiles(startDir)
+			PrintDir(mainDir, selected, position, lastElemPos)
+		}
+
+		if key == keyboard.KeyCtrlB {
+			fileName := ReadText()
+			if len(fileName) < 1 {
+				fileName = "New File"
+			}
+			_, e := os.Create(startDir + `\` + fileName)
+			if e != nil {
+				log.Fatal(e)
+			}
+			selected = fileName
+			mainDir = ReadFiles(startDir)
+			PrintDir(mainDir, selected, position, lastElemPos)
+		}
+
+		if key == keyboard.KeyCtrlR {
+			fmt.Print("\033[H\033[2J")
+			fmt.Print("Rename ", selected, " to : ")
+			name := ReadText()
+			originalPath := startDir + `\` + selected
+			newPath := startDir + `\` + name
+			e := os.Rename(originalPath, newPath)
+			if e != nil {
+				log.Fatal(e)
+			}
+			mainDir = ReadFiles(startDir)
+			selected = name
+			PrintDir(mainDir, selected, position, lastElemPos)
 		}
 	}
 }
@@ -169,14 +207,6 @@ func ReadText() string {
 	reader := bufio.NewReader(os.Stdin)
 	text, _ := reader.ReadString('\n')
 	return strings.TrimSpace(text)
-}
-
-func MakeNewFolder(destination string) {
-	myfile, e := os.Create(destination)
-	if e != nil {
-		log.Fatal(e)
-	}
-	myfile.Close()
 }
 
 func PrintDir(files []fs.FileInfo, selected string, start int, end int) {
