@@ -23,6 +23,7 @@ func main() {
 }
 
 func RunProgram(startDir string) {
+	var selectedForCopy string
 	mainDir := ReadFiles(startDir)
 	selected := mainDir[0].Name()
 	startPos := 0
@@ -33,7 +34,7 @@ func RunProgram(startDir string) {
 	}
 	position := 0
 	for {
-		_, key, _ := keyboard.GetSingleKey()
+		char, key, _ := keyboard.GetSingleKey()
 		if key == keyboard.KeyArrowLeft {
 			back := ReadFiles(goBack(startDir))
 			startDir = strings.TrimRight(filepath.Dir(startDir), `\`)
@@ -148,7 +149,7 @@ func RunProgram(startDir string) {
 			}
 		}
 
-		if key == keyboard.KeyCtrlN {
+		if char == 'n' { //new folder
 
 			folderName := ReadText()
 			if len(folderName) < 1 {
@@ -163,7 +164,7 @@ func RunProgram(startDir string) {
 			PrintDir(mainDir, selected, position, lastElemPos)
 		}
 
-		if key == keyboard.KeyCtrlB {
+		if char == 'm' { //new file
 			fileName := ReadText()
 			if len(fileName) < 1 {
 				fileName = "New File"
@@ -177,7 +178,7 @@ func RunProgram(startDir string) {
 			PrintDir(mainDir, selected, position, lastElemPos)
 		}
 
-		if key == keyboard.KeyCtrlR {
+		if char == 'r' { //rename
 			fmt.Print("\033[H\033[2J")
 			fmt.Print("Rename ", selected, " to : ")
 			name := ReadText()
@@ -190,6 +191,37 @@ func RunProgram(startDir string) {
 			mainDir = ReadFiles(startDir)
 			selected = name
 			PrintDir(mainDir, selected, position, lastElemPos)
+		}
+
+		if char == 'c' { //cut
+			selectedForCopy = startDir + `\` + selected
+		}
+
+		if char == 'p' { //paste
+			if len(selectedForCopy) > 0 && selectedForCopy != startDir {
+
+				err := os.Rename(selectedForCopy, startDir)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				mainDir = ReadFiles(startDir)
+				selected = filepath.Base(selectedForCopy)
+				indexOfSel := IndexOf(mainDir, selected)
+				ReadFiles(startDir)
+				if len(mainDir)-1 > lastElemPos {
+					if indexOfSel >= startPos && indexOfSel <= lastElemPos {
+						position = indexOfSel
+						PrintDir(mainDir, selected, startPos, lastElemPos)
+
+					} else {
+						startPos = indexOfSel
+						position = indexOfSel
+						PrintDir(mainDir, selected, startPos, lastElemPos)
+					}
+				}
+				PrintDir(mainDir, selected, startPos, lastElemPos)
+			}
 		}
 	}
 }
