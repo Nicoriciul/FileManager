@@ -19,7 +19,7 @@ import (
 
 func main() {
 
-	RunProgram(`D:\`)
+	RunProgram(".")
 }
 
 func RunProgram(startDir string) {
@@ -41,7 +41,7 @@ func RunProgram(startDir string) {
 		char, key, _ := keyboard.GetSingleKey()
 		if key == keyboard.KeyArrowLeft { // --------------LEFT------------
 			back := ReadFiles(goBack(startDir))
-			startDir = strings.TrimRight(filepath.Dir(startDir), `\`)
+			startDir = strings.TrimRight(filepath.Dir(startDir), `/`)
 			mainDir = back
 			selected = mainDir[0].Name()
 			position = 0
@@ -124,7 +124,7 @@ func RunProgram(startDir string) {
 			selectedIndex := IndexOf(mainDir, selected)
 			if len(forward) > 0 {
 				mainDir = forward
-				startDir = startDir + `\` + selected
+				startDir = startDir + `/` + selected
 				selected = mainDir[0].Name()
 				position = 0
 				startPos = 0
@@ -135,7 +135,7 @@ func RunProgram(startDir string) {
 				}
 			} else {
 				if selectedIndex != -1 && mainDir[selectedIndex].IsDir() {
-					startDir = startDir + `\` + selected
+					startDir = startDir + `/` + selected
 					selected = ""
 					position = 0
 					startPos = 0
@@ -151,7 +151,7 @@ func RunProgram(startDir string) {
 			if len(folderName) < 1 {
 				folderName = "New Folder"
 			}
-			err := os.Mkdir(startDir+`\`+folderName, 0755)
+			err := os.Mkdir(startDir+`/`+folderName, 0755)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -164,17 +164,19 @@ func RunProgram(startDir string) {
 
 			fileName := "New File"
 
-			file, e := os.Create(startDir + `\` + fileName)
+			file, e := os.Create(startDir + `/` + fileName)
 			if e != nil {
 				log.Fatal(e)
 			}
 			file.Close()
+			position = IndexOf(mainDir, selected)
 			selected = fileName
 			mainDir = ReadFiles(startDir)
 			position, selected, startPos = Rename(mainDir, startDir, position, selected, startPos, lastElemPos, size)
 		}
 
 		if char == 'r' { //rename
+			position = IndexOf(mainDir, selected)
 			position, selected, startPos = Rename(mainDir, startDir, position, selected, startPos, lastElemPos, size)
 		}
 
@@ -182,21 +184,21 @@ func RunProgram(startDir string) {
 			if len(selectedForCopy) > 1 {
 				selectedForCopy = ""
 			}
-			selectedForCut = startDir + `\` + selected
+			selectedForCut = startDir + `/` + selected
 		}
 
 		if char == 'v' { //copy
 			if len(selectedForCut) > 1 {
 				selectedForCut = ""
 			}
-			selectedForCopy = startDir + `\` + selected
+			selectedForCopy = startDir + `/` + selected
 		}
 
 		if char == 'p' { //paste
 
 			if len(selectedForCut) > 0 && selectedForCut != startDir+`\`+filepath.Base(selectedForCut) { //cut-paste file/folder
 				selected = filepath.Base(selectedForCut)
-				cp.Copy(selectedForCut, startDir+`\`+selected)
+				cp.Copy(selectedForCut, startDir+`/`+selected)
 				os.RemoveAll(selectedForCut)
 				mainDir = ReadFiles(startDir)
 				startPos, position = Print(mainDir, selected, lastElemPos, startPos, position)
@@ -204,7 +206,7 @@ func RunProgram(startDir string) {
 			}
 			if len(selectedForCopy) > 0 && selectedForCopy != startDir+`\`+filepath.Base(selectedForCopy) { //copy-paste file/folder
 				selected := filepath.Base(selectedForCopy)
-				cp.Copy(selectedForCopy, startDir+`\`+selected)
+				cp.Copy(selectedForCopy, startDir+`/`+selected)
 				mainDir = ReadFiles(startDir)
 				startPos, position = Print(mainDir, selected, lastElemPos, startPos, position)
 
@@ -213,7 +215,7 @@ func RunProgram(startDir string) {
 
 		if char == 'd' {
 
-			os.RemoveAll(startDir + `\` + selected)
+			os.RemoveAll(startDir + `/` + selected)
 			mainDir = ReadFiles(startDir)
 			if len(mainDir) > 0 {
 				selected = mainDir[position].Name()
@@ -226,6 +228,8 @@ func RunProgram(startDir string) {
 		}
 	}
 }
+
+func GetAccuratePositiom(mainDir []fs.FileInfo, selected string, currentPosition int)
 
 func Rename(mainDir []fs.FileInfo, startDir string, position int, selected string, startPos int, lastElemPos int, size tsize.Size) (int, string, int) {
 	position = IndexOf(mainDir, selected)
@@ -245,8 +249,8 @@ func Rename(mainDir []fs.FileInfo, startDir string, position int, selected strin
 		newName = selected
 	}
 
-	originalPath := startDir + `\` + selected
-	newPath := startDir + `\` + newName
+	originalPath := startDir + `/` + selected
+	newPath := startDir + `/` + newName
 
 	e := os.Rename(originalPath, newPath)
 	if e != nil {
@@ -356,7 +360,7 @@ func goBack(path string) string {
 }
 
 func goForward(paths string, selectedFolder string) string {
-	return paths + `\` + selectedFolder
+	return paths + `/` + selectedFolder
 }
 
 func ReadFiles(path string) []fs.FileInfo {
