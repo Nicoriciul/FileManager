@@ -7,13 +7,13 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/eiannone/keyboard"
 	tsize "github.com/kopoli/go-terminal-size"
-	"github.com/olekukonko/tablewriter"
 	cp "github.com/otiai10/copy"
 )
 
@@ -43,13 +43,16 @@ func RunProgram(startDir string) {
 			back := ReadFiles(goBack(startDir))
 			startDir = strings.TrimRight(filepath.Dir(startDir), `/`)
 			mainDir = back
+			fmt.Println("selecetd is  -----------------", selected)
+			fmt.Println("startdir is ---------------", startDir)
+			fmt.Println("main dir is -------------", mainDir[0].Name(), "   length  ", len(mainDir))
 			selected = mainDir[0].Name()
 			position = 0
 			startPos = 0
 			if lastElemPos >= len(mainDir)-1 {
-				PrintDir(mainDir, selected, 0, lastElemPos)
+				//PrintDir(mainDir, selected, 0, lastElemPos)
 			} else {
-				PrintDir(mainDir, selected, 0, lastElemPos)
+				//PrintDir(mainDir, selected, 0, lastElemPos)
 			}
 		}
 
@@ -87,9 +90,13 @@ func RunProgram(startDir string) {
 		}
 
 		if key == keyboard.KeyArrowDown { // --------------DOWN------------
-			arrayLength := len(mainDir)
-			willFit := arrayLength-1 < lastElemPos
 			position++
+			arrayLength := len(mainDir)
+			if arrayLength < 1 {
+
+				break
+			}
+			willFit := arrayLength-1 < lastElemPos
 			if willFit {
 				if position < arrayLength {
 					selected = mainDir[position].Name()
@@ -124,7 +131,7 @@ func RunProgram(startDir string) {
 			selectedIndex := IndexOf(mainDir, selected)
 			if len(forward) > 0 {
 				mainDir = forward
-				startDir = startDir + `/` + selected
+				startDir = UpdatePath(startDir, selected)
 				selected = mainDir[0].Name()
 				position = 0
 				startPos = 0
@@ -135,23 +142,24 @@ func RunProgram(startDir string) {
 				}
 			} else {
 				if selectedIndex != -1 && mainDir[selectedIndex].IsDir() {
-					startDir = startDir + `/` + selected
+					startDir = UpdatePath(startDir, selected)
 					selected = ""
 					position = 0
 					startPos = 0
-					fmt.Print("\033[H\033[2J")
+					ClearConsole()
 					fmt.Println("empty")
 				}
 			}
+
+		}
+		if char == 'q' {
+			return
 		}
 
 		if char == 'n' { //new folder
 
-			folderName := ReadText()
-			if len(folderName) < 1 {
-				folderName = "New Folder"
-			}
-			err := os.Mkdir(startDir+`/`+folderName, 0755)
+			folderName := "New Folder"
+			err := os.Mkdir(UpdatePath(startDir, folderName), 0755)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -164,7 +172,7 @@ func RunProgram(startDir string) {
 
 			fileName := "New File"
 
-			file, e := os.Create(startDir + `/` + fileName)
+			file, e := os.Create(UpdatePath(startDir, fileName))
 			if e != nil {
 				log.Fatal(e)
 			}
@@ -184,29 +192,29 @@ func RunProgram(startDir string) {
 			if len(selectedForCopy) > 1 {
 				selectedForCopy = ""
 			}
-			selectedForCut = startDir + `/` + selected
+			selectedForCut = UpdatePath(startDir, selected)
 		}
 
 		if char == 'v' { //copy
 			if len(selectedForCut) > 1 {
 				selectedForCut = ""
 			}
-			selectedForCopy = startDir + `/` + selected
+			selectedForCopy = UpdatePath(startDir, selected)
 		}
 
 		if char == 'p' { //paste
 
-			if len(selectedForCut) > 0 && selectedForCut != startDir+`\`+filepath.Base(selectedForCut) { //cut-paste file/folder
+			if len(selectedForCut) > 0 && selectedForCut != UpdatePath(startDir, filepath.Base(selectedForCut)) { //cut-paste file/folder
 				selected = filepath.Base(selectedForCut)
-				cp.Copy(selectedForCut, startDir+`/`+selected)
+				cp.Copy(selectedForCut, UpdatePath(startDir, selected))
 				os.RemoveAll(selectedForCut)
 				mainDir = ReadFiles(startDir)
 				startPos, position = Print(mainDir, selected, lastElemPos, startPos, position)
 
 			}
-			if len(selectedForCopy) > 0 && selectedForCopy != startDir+`\`+filepath.Base(selectedForCopy) { //copy-paste file/folder
+			if len(selectedForCopy) > 0 && selectedForCopy != UpdatePath(startDir, filepath.Base(selectedForCopy)) { //copy-paste file/folder
 				selected := filepath.Base(selectedForCopy)
-				cp.Copy(selectedForCopy, startDir+`/`+selected)
+				cp.Copy(selectedForCopy, UpdatePath(startDir, selected))
 				mainDir = ReadFiles(startDir)
 				startPos, position = Print(mainDir, selected, lastElemPos, startPos, position)
 
@@ -214,43 +222,58 @@ func RunProgram(startDir string) {
 		}
 
 		if char == 'd' {
-
-			os.RemoveAll(startDir + `/` + selected)
+			os.RemoveAll(UpdatePath(startDir, selected))
 			mainDir = ReadFiles(startDir)
 			if len(mainDir) > 0 {
 				selected = mainDir[position].Name()
 				PrintDir(mainDir, selected, startPos, lastElemPos)
 			} else {
-				fmt.Print("\033[H\033[2J")
+				selected = ""
+				ClearConsole()
 				fmt.Println("empty")
 			}
 
 		}
+
+		if char == 'h' {
+			colorReset := "\033[0m"
+			colorRed := "\033[31m"
+			ClearConsole()
+			commands := []string{"COPY = V", "CUT = C", "PASTE = P", "RENAME = R", "NEW FILE = M", "NEW FOLDER = N", "DELETE = D", "HELP = H", "QUIT = Q"}
+			for _, current := range commands {
+				fmt.Println(string(colorRed), current)
+			}
+			fmt.Print(colorReset)
+		}
 	}
 }
 
-func GetAccuratePositiom(mainDir []fs.FileInfo, selected string, currentPosition int)
+func UpdatePath(currentPath string, selected string) string {
+	return currentPath + `/` + selected
+}
+func ClearConsole() {
 
+	c := exec.Command("clear")
+	c.Stdout = os.Stdout
+	c.Run()
+}
 func Rename(mainDir []fs.FileInfo, startDir string, position int, selected string, startPos int, lastElemPos int, size tsize.Size) (int, string, int) {
-	position = IndexOf(mainDir, selected)
-
-	startPos = position
 	PrintDir(mainDir, selected, startPos, startPos+lastElemPos)
 	PrintOnLine(selected, GetGap(mainDir, size.Height))
 	var newName string
 	_, key, _ := keyboard.GetSingleKey()
-	if key == keyboard.KeyBackspace {
+	if key == keyboard.KeyBackspace2 || key == keyboard.KeyBackspace {
+
 		PrintDir(mainDir, selected, position, position+lastElemPos)
 		PrintOnLine("", GetGap(mainDir, size.Height))
 		newName = ReadText()
 
-	}
-	if key == keyboard.KeyEnter {
+	} else if key == keyboard.KeyEnter {
 		newName = selected
 	}
 
-	originalPath := startDir + `/` + selected
-	newPath := startDir + `/` + newName
+	originalPath := UpdatePath(startDir, selected)
+	newPath := UpdatePath(startDir, newName)
 
 	e := os.Rename(originalPath, newPath)
 	if e != nil {
@@ -312,7 +335,7 @@ func ReadText() string {
 }
 
 func PrintDir(files []fs.FileInfo, selected string, start int, end int) {
-	fmt.Print("\033[H\033[2J")
+	ClearConsole()
 	width := 70
 	colorGreen := "\033[32m"
 	colorReset := "\033[0m"
@@ -328,21 +351,6 @@ func PrintDir(files []fs.FileInfo, selected string, start int, end int) {
 			fmt.Println(GetFullText(dirName, dirSize, width))
 		}
 	}
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"COPY=V", "CUT=C", "PASTE=P", "NEW FOLDER=N", "NEW FILE=M", "RENAME=R"})
-	table.SetHeaderColor(tablewriter.Colors{tablewriter.FgHiRedColor, tablewriter.Bold, tablewriter.BgBlackColor},
-		tablewriter.Colors{tablewriter.FgHiRedColor, tablewriter.Bold, tablewriter.BgBlackColor},
-		tablewriter.Colors{tablewriter.FgHiRedColor, tablewriter.Bold, tablewriter.BgBlackColor},
-		tablewriter.Colors{tablewriter.FgHiRedColor, tablewriter.Bold, tablewriter.BgBlackColor},
-		tablewriter.Colors{tablewriter.FgHiRedColor, tablewriter.Bold, tablewriter.BgBlackColor},
-		tablewriter.Colors{tablewriter.FgHiRedColor, tablewriter.Bold, tablewriter.BgBlackColor})
-	table.SetCenterSeparator("")
-	table.SetColumnSeparator("")
-	table.SetRowSeparator("")
-	table.SetHeaderLine(false)
-	table.SetBorder(false)
-	table.SetTablePadding("\t")
-	table.Render()
 }
 
 func GetFullText(input string, fileSize string, maxLength int) string {
