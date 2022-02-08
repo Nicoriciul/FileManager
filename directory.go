@@ -1,18 +1,34 @@
 package main
 
-import "io/fs"
+import (
+	"io/fs"
+	"io/ioutil"
 
-var Directory = GetDirectory(".")
+	tsize "github.com/kopoli/go-terminal-size"
+)
+
+var Directory = ReadFiles(".")
 var Selected string
-var StartPosition int
-var CurrentPosition int
-var EndPos int
+var StartPos = 0
+var CurrentPosition = 0
+var Size, _ = tsize.GetSize()
+var WindowSize = Size.Height - 10
+var EndPos = LastPos()
+var SelectedForCopy string
+var SelectedForCut string
 
-func GetDirectory(path string) []fs.FileInfo {
-
-	return ReadFiles(path)
+func ResetCoordinates(directory []fs.FileInfo) {
+	StartPos = 0
+	CurrentPosition = 0
+	EndPos = LastPos()
+	Selected = directory[CurrentPosition].Name()
 }
 
-func ResetCoordinates() {
+func LastPos() int {
+	return Size.Height - 10 + StartPos
+}
 
+func ReadFiles(path string) []fs.FileInfo {
+	files, _ := ioutil.ReadDir(path)
+	return files
 }
