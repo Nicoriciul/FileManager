@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io/fs"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -16,91 +17,87 @@ import (
 	cp "github.com/otiai10/copy"
 )
 
+type Coordinates struct {
+	windowFirstElemIndex int
+	selectedIndex        int
+	windowLastElemIndex  int
+	selectedName         string
+}
+
+var SelectedForCopy string
+var SelectedForCut string
+var Size, _ = tsize.GetSize()
+var WindowSize = Size.Height - 10
+
 func main() {
 
 	RunProgram(".")
 
 }
 
-func PrintDirectory(dir []fs.FileInfo) {
+func Printdirectory(dir []fs.FileInfo) {
 	for i := 0; i < len(dir); i++ {
 		fmt.Println(dir[i].Name())
 	}
 }
 
 func RunProgram(startDir string) {
-	var SelectedForCopy string
-	var SelectedForCut string
-	ResetCoordinates(Directory)
-	PrintDir(Directory, Selected, 0, LastPos())
+	directory := ReadFiles(startDir)
+	coordinates := ResetCoordinates(directory)
+	PrintDir(directory, coordinates)
 
 	for {
 		switch char, key, _ := keyboard.GetSingleKey(); {
 		case key == keyboard.KeyArrowLeft: // --------------LEFT------------
 			back := ReadFiles(filepath.Dir(startDir))
 			startDir = strings.TrimRight(filepath.Dir(startDir), `/`)
-			Directory = back
-			ResetCoordinates(Directory)
-			PrintDir(Directory, Selected, StartPos, LastPos())
+			directory = back
+			coordinates = ResetCoordinates(directory)
+			PrintDir(directory, coordinates)
 
 		case key == keyboard.KeyArrowUp: // --------------UP------------
-			if len(Directory) < 1 {
+			if len(directory) < 1 {
 				break
 			}
-			willFit := len(Directory)-1 < WindowSize
-			CurrentPosition--
+			willFit := len(directory)-1 < WindowSize
+			coordinates.selectedIndex--
 			if willFit {
-				GoUpWhenListFits()
+				coordinates = GoUpWhenListFits(directory, coordinates)
 
 			} else {
-				GoUpWhenListDoesntFit()
+				coordinates = GoUpWhenListDoesntFit(directory, coordinates)
 			}
 
 		case key == keyboard.KeyArrowDown: // --------------DOWN------------
 
-			if len(Directory) < 1 {
+			if len(directory) < 1 {
 
 				break
 			}
-			willFit := len(Directory)-1 < WindowSize
-			CurrentPosition++
+			willFit := len(directory)-1 < WindowSize
+			coordinates.selectedIndex++
 			if willFit {
-				GoDownWhenListFits()
+				coordinates = GoDownWhenListFits(directory, coordinates)
 			} else {
-				if CurrentPosition < len(Directory) {
-					if CurrentPosition <= LastPos() {
-						Selected = Directory[CurrentPosition].Name()
-						PrintDir(Directory, Selected, StartPos, LastPos())
-					}
-					if CurrentPosition > LastPos() {
-						StartPos++
-						Selected = Directory[CurrentPosition].Name()
-						PrintDir(Directory, Selected, StartPos, LastPos())
-					}
-				} else {
-					StartPos = 0
-					CurrentPosition = 0
-					Selected = Directory[CurrentPosition].Name()
-					PrintDir(Directory, Selected, StartPos, WindowSize)
-
-				}
+				coordinates = GoDownWhenListDoesntFit(directory, coordinates)
 			}
 
 		case key == keyboard.KeyArrowRight: // --------------RIGHT------------
-			forward := ReadFiles(goForward(startDir, Selected))
-			SelectedIndex := IndexOf(Directory, Selected)
+			forward := ReadFiles(goForward(startDir, coordinates.selectedName))
+			SelectedIndex := IndexOf(directory, coordinates.selectedName)
 			if len(forward) > 0 {
-				Directory = forward
-				startDir = UpdatePath(startDir, Selected)
-				ResetCoordinates(Directory)
-				PrintDir(Directory, Selected, 0, WindowSize)
+				directory = forward
+				startDir = UpdatePath(startDir, coordinates.selectedName)
+				coordinates = ResetCoordinates(directory)
+				PrintDir(directory, coordinates)
 
 			} else {
-				if SelectedIndex != -1 && Directory[SelectedIndex].IsDir() {
-					startDir = UpdatePath(startDir, Selected)
-					Directory = forward
-					CurrentPosition = 0
-					StartPos = 0
+				if SelectedIndex != -1 && directory[SelectedIndex].IsDir() {
+					startDir = UpdatePath(startDir, coordinates.selectedName)
+					directory = forward
+					coordinates.selectedIndex = 0
+					coordinates.windowFirstElemIndex = 0
+					coordinates.windowLastElemIndex = LastPos(0)
 					ClearConsole()
 					fmt.Println("empty")
 				}
@@ -116,9 +113,9 @@ func RunProgram(startDir string) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			Selected = folderName
-			Directory = ReadFiles(startDir)
-			CurrentPosition, Selected, StartPos = Rename(Directory, startDir, CurrentPosition, Selected, StartPos, WindowSize, Size)
+			coordinates.selectedName = folderName
+			directory = ReadFiles(startDir)
+			coordinates = Rename(directory, startDir, coordinates)
 
 		case char == 'm': //new file
 
@@ -129,52 +126,52 @@ func RunProgram(startDir string) {
 				log.Fatal(e)
 			}
 			file.Close()
-			CurrentPosition = IndexOf(Directory, Selected)
-			Selected = fileName
-			Directory = ReadFiles(startDir)
-			CurrentPosition, Selected, StartPos = Rename(Directory, startDir, CurrentPosition, Selected, StartPos, WindowSize, Size)
+			coordinates.selectedIndex = IndexOf(directory, coordinates.selectedName)
+			coordinates.selectedName = fileName
+			directory = ReadFiles(startDir)
+			coordinates = Rename(directory, startDir, coordinates)
 
 		case char == 'r': //rename
-			CurrentPosition = IndexOf(Directory, Selected)
-			CurrentPosition, Selected, StartPos = Rename(Directory, startDir, CurrentPosition, Selected, StartPos, WindowSize, Size)
+			coordinates.selectedIndex = IndexOf(directory, coordinates.selectedName)
+			coordinates = Rename(directory, startDir, coordinates)
 
 		case char == 'c': //cut
 			if len(SelectedForCopy) > 1 {
 				SelectedForCopy = ""
 			}
-			SelectedForCut = UpdatePath(startDir, Selected)
+			SelectedForCut = UpdatePath(startDir, coordinates.selectedName)
 
 		case char == 'v': //copy
 			if len(SelectedForCut) > 1 {
 				SelectedForCut = ""
 			}
-			SelectedForCopy = UpdatePath(startDir, Selected)
+			SelectedForCopy = UpdatePath(startDir, coordinates.selectedName)
 
 		case char == 'p': //paste
-
+			coordinates.selectedName = filepath.Base(SelectedForCut)
+			cp.Copy(SelectedForCut, UpdatePath(startDir, coordinates.selectedName))
 			if len(SelectedForCut) > 0 && SelectedForCut != UpdatePath(startDir, filepath.Base(SelectedForCut)) { //cut-paste file/folder
-				Selected = filepath.Base(SelectedForCut)
-				cp.Copy(SelectedForCut, UpdatePath(startDir, Selected))
+
 				os.RemoveAll(SelectedForCut)
-				Directory = ReadFiles(startDir)
-				StartPos, CurrentPosition = Print(Directory, Selected, WindowSize, StartPos, CurrentPosition)
+				directory = ReadFiles(startDir)
+				coordinates = Print(directory, coordinates)
 
 			}
 			if len(SelectedForCopy) > 0 && SelectedForCopy != UpdatePath(startDir, filepath.Base(SelectedForCopy)) { //copy-paste file/folder
 				Selected := filepath.Base(SelectedForCopy)
 				cp.Copy(SelectedForCopy, UpdatePath(startDir, Selected))
-				Directory = ReadFiles(startDir)
-				StartPos, CurrentPosition = Print(Directory, Selected, WindowSize, StartPos, CurrentPosition)
+				directory = ReadFiles(startDir)
+				coordinates = Print(directory, coordinates)
 			}
 
 		case char == 'd':
-			os.RemoveAll(UpdatePath(startDir, Selected))
-			Directory = ReadFiles(startDir)
-			if len(Directory) > 0 {
-				Selected = Directory[CurrentPosition].Name()
-				PrintDir(Directory, Selected, StartPos, WindowSize)
+			os.RemoveAll(UpdatePath(startDir, coordinates.selectedName))
+			directory = ReadFiles(startDir)
+			if len(directory) > 0 {
+				coordinates.selectedName = directory[coordinates.selectedIndex].Name()
+				PrintDir(directory, coordinates)
 			} else {
-				Selected = ""
+				coordinates.selectedName = ""
 				ClearConsole()
 				fmt.Println("empty")
 			}
@@ -192,120 +189,126 @@ func RunProgram(startDir string) {
 	}
 }
 
-func GoDownWhenListFits() {
-	if CurrentPosition < len(Directory) {
-		Selected = Directory[CurrentPosition].Name()
+func GoDownWhenListFits(directory []fs.FileInfo, coordinates Coordinates) Coordinates {
+	if coordinates.selectedIndex < len(directory) {
+		coordinates.selectedName = directory[coordinates.selectedIndex].Name()
 	} else {
-		CurrentPosition = 0
-		Selected = Directory[CurrentPosition].Name()
+		coordinates = ResetCoordinates(directory)
 	}
-	PrintDir(Directory, Selected, 0, len(Directory)-1)
+	PrintDir(directory, coordinates)
+	return coordinates
 }
 
-func GoDownWhenListDoesntFit() {
+func GoDownWhenListDoesntFit(directory []fs.FileInfo, coordinates Coordinates) Coordinates {
 
-	if CurrentPosition <= LastPos() {
-		Selected = Directory[CurrentPosition].Name()
-		PrintDir(Directory, Selected, StartPos, LastPos())
-		return
+	if coordinates.selectedIndex <= LastPos(coordinates.windowFirstElemIndex) {
+		coordinates.selectedName = directory[coordinates.selectedIndex].Name()
+		PrintDir(directory, coordinates)
+		return coordinates
 	}
-	ScrollDown()
+	coordinates = ScrollDown(directory, coordinates)
+	return coordinates
 }
 
-func ScrollDown() {
-	if CurrentPosition > LastPos() && LastPos()+1 <= len(Directory)-1 {
-		StartPos++
-		Selected = Directory[CurrentPosition].Name()
-		PrintDir(Directory, Selected, StartPos, LastPos())
+func ScrollDown(directory []fs.FileInfo, coordinates Coordinates) Coordinates {
+	if coordinates.selectedIndex > LastPos(coordinates.windowFirstElemIndex) && LastPos(coordinates.windowFirstElemIndex)+1 <= len(directory)-1 {
+		coordinates.windowFirstElemIndex++
+		coordinates.windowLastElemIndex = LastPos(coordinates.windowFirstElemIndex)
+		coordinates.selectedName = directory[coordinates.selectedIndex].Name()
+		PrintDir(directory, coordinates)
 	} else {
 
-		StartPos = 0
-		CurrentPosition = 0
-		Selected = Directory[CurrentPosition].Name()
-		PrintDir(Directory, Selected, StartPos, WindowSize)
+		coordinates = ResetCoordinates(directory)
+		PrintDir(directory, coordinates)
 	}
+	return coordinates
 }
 
-func GoUpWhenListFits() {
-	if CurrentPosition >= 0 {
-		Selected = Directory[CurrentPosition].Name()
-	} else if len(Directory) > 0 {
-		CurrentPosition = len(Directory) - 1
-		Selected = Directory[CurrentPosition].Name()
+func GoUpWhenListFits(directory []fs.FileInfo, coordinates Coordinates) Coordinates {
+	if coordinates.selectedIndex >= 0 {
+		coordinates.selectedName = directory[coordinates.selectedIndex].Name()
+	} else if len(directory) > 0 {
+		coordinates.selectedIndex = len(directory) - 1
+		coordinates.selectedName = directory[coordinates.selectedIndex].Name()
 	}
-	PrintDir(Directory, Selected, 0, len(Directory)-1)
+	PrintDir(directory, coordinates)
+	return coordinates
 }
 
-func GoUpWhenListDoesntFit() {
+func GoUpWhenListDoesntFit(directory []fs.FileInfo, coordinates Coordinates) Coordinates {
 
-	if CurrentPosition >= StartPos {
-		Selected = Directory[CurrentPosition].Name()
-		PrintDir(Directory, Selected, StartPos, LastPos())
-		return
+	if coordinates.selectedIndex >= coordinates.windowFirstElemIndex {
+		coordinates.selectedName = directory[coordinates.selectedIndex].Name()
+		coordinates.windowLastElemIndex = LastPos(coordinates.windowFirstElemIndex)
+		PrintDir(directory, coordinates)
+		return coordinates
 	}
-	ScrollUp()
+	coordinates = ScrollUp(directory, coordinates)
+	return coordinates
+
 }
 
-func ScrollUp() {
-	if CurrentPosition < StartPos && StartPos-1 >= 0 {
-		StartPos--
-		Selected = Directory[CurrentPosition].Name()
-		PrintDir(Directory, Selected, StartPos, LastPos())
+func ScrollUp(directory []fs.FileInfo, coordinates Coordinates) Coordinates {
+	if coordinates.selectedIndex < coordinates.windowLastElemIndex && coordinates.windowFirstElemIndex-1 >= 0 {
+		coordinates.windowFirstElemIndex--
 	} else {
-		StartPos = len(Directory) - WindowSize - 1
-		CurrentPosition = len(Directory) - 1
-		Selected = Directory[CurrentPosition].Name()
-		PrintDir(Directory, Selected, StartPos, LastPos())
+		coordinates.windowFirstElemIndex = len(directory) - WindowSize - 1
+		coordinates.selectedIndex = len(directory) - 1
 	}
+	coordinates.windowLastElemIndex = LastPos(coordinates.windowFirstElemIndex)
+	coordinates.selectedName = directory[coordinates.selectedIndex].Name()
+	PrintDir(directory, coordinates)
+	return coordinates
 }
 
 func UpdatePath(currentPath string, Selected string) string {
 	return currentPath + `/` + Selected
 }
+
 func ClearConsole() {
 
 	c := exec.Command("clear")
 	c.Stdout = os.Stdout
 	c.Run()
 }
-func Rename(Directory []fs.FileInfo, startDir string, CurrentPosition int, Selected string, StartPos int, WindowSize int, size tsize.Size) (int, string, int) {
-	PrintDir(Directory, Selected, StartPos, LastPos())
-	PrintOnLine(Selected, GetGap(Directory, size.Height))
+func Rename(directory []fs.FileInfo, startDir string, coordinates Coordinates) Coordinates {
+	PrintDir(directory, coordinates)
+	PrintOnLine(coordinates.selectedName, GetGap(directory, Size.Height))
 	var newName string
 	_, key, _ := keyboard.GetSingleKey()
 	if key == keyboard.KeyBackspace2 || key == keyboard.KeyBackspace {
 
-		PrintDir(Directory, Selected, CurrentPosition, LastPos())
-		PrintOnLine("", GetGap(Directory, size.Height))
+		PrintDir(directory, coordinates)
+		PrintOnLine("", GetGap(directory, Size.Height))
 		newName = ReadText()
 
 	} else if key == keyboard.KeyEnter {
-		newName = Selected
+		newName = coordinates.selectedName
 	}
 
-	originalPath := UpdatePath(startDir, Selected)
+	originalPath := UpdatePath(startDir, coordinates.selectedName)
 	newPath := UpdatePath(startDir, newName)
 
 	e := os.Rename(originalPath, newPath)
 	if e != nil {
 		log.Fatal(e)
 	}
-	Directory = ReadFiles(startDir)
-	Selected = newName
-	CurrentPosition = IndexOf(Directory, Selected)
-	StartPos = CurrentPosition
-	PrintDir(Directory, Selected, CurrentPosition, WindowSize)
+	directory = ReadFiles(startDir)
+	coordinates.selectedName = newName
+	coordinates.selectedIndex = IndexOf(directory, coordinates.selectedName)
+	coordinates.windowFirstElemIndex = coordinates.selectedIndex
+	PrintDir(directory, coordinates)
 
-	return CurrentPosition, Selected, StartPos
+	return coordinates
 }
 
-func GetGap(Directory []fs.FileInfo, height int) int {
+func GetGap(directory []fs.FileInfo, height int) int {
 
-	if len(Directory)+10 > height {
+	if len(directory)+10 > height {
 
 		return 6
 	}
-	return height - len(Directory) - 3
+	return height - len(directory) - 3
 }
 
 func PrintOnLine(name string, line int) {
@@ -314,22 +317,26 @@ func PrintOnLine(name string, line int) {
 	}
 	fmt.Print(name)
 }
-func Print(Directory []fs.FileInfo, Selected string, WindowSizeint, StartPos int, CurrentPosition int) (int, int) {
-	indexOfSel := IndexOf(Directory, Selected)
-	if len(Directory)-1 > WindowSize {
-		if indexOfSel >= StartPos && indexOfSel <= WindowSize {
-			CurrentPosition = indexOfSel
-			PrintDir(Directory, Selected, StartPos, WindowSize)
+func Print(directory []fs.FileInfo, coordinates Coordinates) Coordinates {
+	indexOfSel := IndexOf(directory, coordinates.selectedName)
+	if len(directory)-1 > WindowSize {
+		if indexOfSel >= coordinates.windowFirstElemIndex && indexOfSel <= WindowSize {
+			coordinates.selectedIndex = indexOfSel
+			PrintDir(directory, coordinates)
 
 		} else {
-			StartPos = indexOfSel
-			CurrentPosition = indexOfSel
-			PrintDir(Directory, Selected, StartPos, WindowSize)
+			coordinates.windowFirstElemIndex = indexOfSel
+			coordinates.selectedIndex = indexOfSel
+			PrintDir(directory, coordinates)
 
 		}
 	}
-	PrintDir(Directory, Selected, StartPos, WindowSize)
-	return StartPos, CurrentPosition
+	PrintDir(directory, coordinates)
+	return coordinates
+}
+
+func WillFit(directory []fs.FileInfo) bool {
+	return len(directory)-1 < WindowSize
 }
 
 func IndexOf(files []fs.FileInfo, Selected string) int {
@@ -347,17 +354,17 @@ func ReadText() string {
 	return strings.TrimSpace(text)
 }
 
-func PrintDir(files []fs.FileInfo, Selected string, start int, end int) {
+func PrintDir(files []fs.FileInfo, coordinates Coordinates) {
 	ClearConsole()
 	width := 70
 	colorGreen := "\033[32m"
 	colorReset := "\033[0m"
-	for i := start; i <= end && i < len(files); i++ {
+	for i := coordinates.windowFirstElemIndex; i <= coordinates.windowLastElemIndex && i < len(files); i++ {
 
 		dirName := files[i].Name()
 		dirSize := strconv.Itoa(int(files[i].Size()))
 
-		if Selected == dirName {
+		if coordinates.selectedName == dirName {
 			fmt.Print(string(colorGreen), GetFullText(dirName, dirSize, width))
 			fmt.Println(string(colorReset))
 		} else {
@@ -382,4 +389,17 @@ func goBack(path string) string {
 
 func goForward(paths string, SelectedFolder string) string {
 	return paths + `/` + SelectedFolder
+}
+
+func ResetCoordinates(directory []fs.FileInfo) Coordinates {
+	return Coordinates{0, 0, LastPos(0), directory[0].Name()}
+}
+
+func LastPos(windowFirstElemIndex int) int {
+	return Size.Height - 10 + windowFirstElemIndex
+}
+
+func ReadFiles(path string) []fs.FileInfo {
+	files, _ := ioutil.ReadDir(path)
+	return files
 }
