@@ -124,8 +124,7 @@ func RunProgram(startDir string) {
 			PrintDir(directory, coordinates)
 
 		case char == 'r': //rename
-			coordinates.selectedIndex = IndexOf(directory, coordinates.selectedName)
-			newName := NameFileOrFolder(directory, coordinates, directory[coordinates.selectedIndex].Name())
+			newName := NameFileOrFolder(directory, coordinates, coordinates.selectedName)
 			originalPath := UpdatePath(startDir, coordinates.selectedName)
 			newPath := UpdatePath(startDir, newName)
 			e := os.Rename(originalPath, newPath)
@@ -135,7 +134,7 @@ func RunProgram(startDir string) {
 			directory = ReadFiles(startDir)
 			coordinates.selectedName = newName
 			coordinates.selectedIndex = IndexOf(directory, coordinates.selectedName)
-			coordinates.windowFirstElemIndex = coordinates.selectedIndex
+			coordinates = UpdateCoordinatesBeforePrinting(directory, coordinates)
 			PrintDir(directory, coordinates)
 
 		case char == 'c': //cut
@@ -159,7 +158,7 @@ func RunProgram(startDir string) {
 			coordinates, directory = Paste(startDir, coordinates)
 
 		case char == 'd': //delete
-			directory = Delete(startDir, coordinates)
+			directory, coordinates = Delete(startDir, coordinates)
 
 		case char == 'h': //help
 			PrintHelp()
@@ -177,9 +176,8 @@ func Paste(startDir string, coordinates Coordinates) (Coordinates, []fs.FileInfo
 	}
 	directory := ReadFiles(startDir)
 	coordinates.selectedIndex = IndexOf(directory, coordinates.selectedName)
-	//fmt.Println("coordinates Selecte", coordinates.selectedIndex)
-
-	//Print(directory, coordinates)
+	coordinates = UpdateCoordinatesBeforePrinting(directory, coordinates)
+	PrintDir(directory, coordinates)
 	return coordinates, directory
 }
 
@@ -201,7 +199,7 @@ func NameExists(startDir string) bool {
 		SelectedForCopy == UpdatePath(startDir, filepath.Base(SelectedForCopy))
 }
 
-func Delete(startDir string, coordinates Coordinates) []fs.FileInfo {
+func Delete(startDir string, coordinates Coordinates) ([]fs.FileInfo, Coordinates) {
 	os.RemoveAll(UpdatePath(startDir, coordinates.selectedName))
 	directory := ReadFiles(startDir)
 	if len(directory) > 0 {
@@ -212,7 +210,7 @@ func Delete(startDir string, coordinates Coordinates) []fs.FileInfo {
 		ClearConsole()
 		fmt.Println("empty")
 	}
-	return directory
+	return directory, coordinates
 }
 
 func PrintHelp() {
@@ -370,24 +368,6 @@ func PrintOnLine(name string, line int) {
 		fmt.Println("")
 	}
 	fmt.Print(name)
-}
-
-func Print(directory []fs.FileInfo, coordinates Coordinates) Coordinates {
-	indexOfSel := IndexOf(directory, coordinates.selectedName)
-	if len(directory)-1 > WindowSize {
-		if indexOfSel >= coordinates.windowFirstElemIndex && indexOfSel <= WindowSize {
-			coordinates.selectedIndex = indexOfSel
-			PrintDir(directory, coordinates)
-
-		} else {
-			coordinates.windowFirstElemIndex = indexOfSel
-			coordinates.selectedIndex = indexOfSel
-			PrintDir(directory, coordinates)
-
-		}
-	}
-	PrintDir(directory, coordinates)
-	return coordinates
 }
 
 func WillFit(directory []fs.FileInfo) bool {
