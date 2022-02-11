@@ -47,125 +47,55 @@ func RunProgram(startDir string) {
 	PrintDir(directory, coordinates)
 
 	for char, key, _ := keyboard.GetSingleKey(); char != 'q'; {
-		switch {
-		case key == keyboard.KeyArrowLeft: // --------------LEFT------------
-			back := ReadFiles(filepath.Dir(startDir))
-			startDir = strings.TrimRight(filepath.Dir(startDir), `/`)
-			directory = back
-			coordinates = ResetCoordinates(directory)
-			PrintDir(directory, coordinates)
-
-		case key == keyboard.KeyArrowUp: // --------------UP------------
-			if len(directory) < 1 {
-				break
-			}
-			coordinates.selectedIndex--
-			if WillFit(directory) {
-				coordinates = GoUpWhenListFits(directory, coordinates)
-
-			} else {
-				coordinates = GoUpWhenListDoesntFit(directory, coordinates)
-			}
-
-		case key == keyboard.KeyArrowDown: // --------------DOWN------------
-
-			if len(directory) < 1 {
-
-				break
-			}
-			coordinates.selectedIndex++
-			if WillFit(directory) {
-				coordinates = GoDownWhenListFits(directory, coordinates)
-			} else {
-				coordinates = GoDownWhenListDoesntFit(directory, coordinates)
-			}
-
-		case key == keyboard.KeyArrowRight: // --------------RIGHT------------
-			forward := ReadFiles(goForward(startDir, coordinates.selectedName))
-			SelectedIndex := IndexOf(directory, coordinates.selectedName)
-			if len(forward) > 0 {
-				directory = forward
-				startDir = UpdatePath(startDir, coordinates.selectedName)
-				coordinates = ResetCoordinates(directory)
-				PrintDir(directory, coordinates)
-
-			} else if SelectedIndex != -1 && directory[SelectedIndex].IsDir() {
-				startDir = UpdatePath(startDir, coordinates.selectedName)
-				directory = forward
-				coordinates = ResetCoordinates(directory)
-				ClearConsole()
-				fmt.Println("empty")
-			}
-
-		case char == 'q':
-			return
-
-		case char == 'n': //new folder
-			newName := NameFileOrFolder(directory, coordinates, "New Folder")
-			err := os.Mkdir(UpdatePath(startDir, newName), 0755)
-			if err != nil {
-				log.Fatal(err)
-			}
-			coordinates.selectedIndex = IndexOf(directory, coordinates.selectedName)
-			coordinates.selectedName = newName
-			directory = ReadFiles(startDir)
-			PrintDir(directory, coordinates)
-
-		case char == 'm': //new file
-			newName := NameFileOrFolder(directory, coordinates, "New File")
-			file, e := os.Create(UpdatePath(startDir, newName))
-			if e != nil {
-				log.Fatal(e)
-			}
-			file.Close()
-			coordinates.selectedIndex = IndexOf(directory, coordinates.selectedName)
-			coordinates.selectedName = newName
-			directory = ReadFiles(startDir)
-			PrintDir(directory, coordinates)
-
-		case char == 'r': //rename
-			newName := NameFileOrFolder(directory, coordinates, coordinates.selectedName)
-			originalPath := UpdatePath(startDir, coordinates.selectedName)
-			newPath := UpdatePath(startDir, newName)
-			e := os.Rename(originalPath, newPath)
-			if e != nil {
-				log.Fatal(e)
-			}
-			directory = ReadFiles(startDir)
-			coordinates.selectedName = newName
-			coordinates.selectedIndex = IndexOf(directory, coordinates.selectedName)
-			coordinates = UpdateCoordinatesBeforePrinting(directory, coordinates)
-			PrintDir(directory, coordinates)
-
-		case char == 'c': //cut
-			if len(SelectedForCopy) > 1 {
-				SelectedForCopy = ""
-			}
-			SelectedForCut = UpdatePath(startDir, coordinates.selectedName)
-
-		case char == 'v': //copy
-			if len(SelectedForCut) > 1 {
-				SelectedForCut = ""
-			}
-			SelectedForCopy = UpdatePath(startDir, coordinates.selectedName)
-
-		case char == 'p': //paste
-			if NameExists(startDir) {
-				ClearConsole()
-				fmt.Println("Name already exists")
-				break
-			}
-			coordinates, directory = Paste(startDir, coordinates)
-
-		case char == 'd': //delete
-			directory, coordinates = Delete(startDir, coordinates)
-
-		case char == 'h': //help
-			PrintHelp()
-		}
+		startDir, directory, coordinates = ExecuteComandsOnKeystroke(key, startDir, directory, coordinates, char)
 		char, key, _ = keyboard.GetSingleKey()
 	}
+}
 
+func NewFolder(directory []fs.FileInfo, coordinates Coordinates, startDir string) ([]fs.FileInfo, Coordinates) {
+	newName := NameFileOrFolder(directory, coordinates, "New Folder")
+	err := os.Mkdir(UpdatePath(startDir, newName), 0755)
+	if err != nil {
+		log.Fatal(err)
+	}
+	directory = ReadFiles(startDir)
+	coordinates.selectedIndex = IndexOf(directory, newName)
+	coordinates.selectedName = newName
+	coordinates = UpdateCoordinatesBeforePrinting(directory, coordinates)
+	fmt.Println(coordinates)
+	PrintDir(directory, coordinates)
+	return directory, coordinates
+}
+
+func NewFile(directory []fs.FileInfo, coordinates Coordinates, startDir string) ([]fs.FileInfo, Coordinates) {
+	newName := NameFileOrFolder(directory, coordinates, "New File")
+	file, e := os.Create(UpdatePath(startDir, newName))
+	if e != nil {
+		log.Fatal(e)
+	}
+	file.Close()
+	directory = ReadFiles(startDir)
+	coordinates.selectedIndex = IndexOf(directory, newName)
+	coordinates.selectedName = newName
+	coordinates = UpdateCoordinatesBeforePrinting(directory, coordinates)
+	PrintDir(directory, coordinates)
+	return directory, coordinates
+}
+
+func Rename(directory []fs.FileInfo, coordinates Coordinates, startDir string) ([]fs.FileInfo, Coordinates) {
+	newName := NameFileOrFolder(directory, coordinates, coordinates.selectedName)
+	originalPath := UpdatePath(startDir, coordinates.selectedName)
+	newPath := UpdatePath(startDir, newName)
+	e := os.Rename(originalPath, newPath)
+	if e != nil {
+		log.Fatal(e)
+	}
+	directory = ReadFiles(startDir)
+	coordinates.selectedName = newName
+	coordinates.selectedIndex = IndexOf(directory, coordinates.selectedName)
+	coordinates = UpdateCoordinatesBeforePrinting(directory, coordinates)
+	PrintDir(directory, coordinates)
+	return directory, coordinates
 }
 
 func Paste(startDir string, coordinates Coordinates) (Coordinates, []fs.FileInfo) {
@@ -204,7 +134,7 @@ func Delete(startDir string, coordinates Coordinates) ([]fs.FileInfo, Coordinate
 	directory := ReadFiles(startDir)
 	if len(directory) > 0 {
 		coordinates = ResetCoordinates(directory)
-		PrintDir(directory, coordinates)
+
 	} else {
 		coordinates.selectedName = ""
 		ClearConsole()
@@ -416,10 +346,6 @@ func GetFullText(input string, fileSize string, maxLength int) string {
 	}
 	availableSpace := maxLength - len(input) - len(fileSize)
 	return input + strings.Repeat(" ", availableSpace) + fileSize + " KB"
-}
-
-func goForward(paths string, SelectedFolder string) string {
-	return paths + `/` + SelectedFolder
 }
 
 func ResetCoordinates(directory []fs.FileInfo) Coordinates {
