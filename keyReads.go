@@ -2,67 +2,57 @@ package main
 
 import (
 	"fmt"
-	"io/fs"
 
 	"github.com/eiannone/keyboard"
 )
 
-func ExecuteComandsOnKeystroke(key keyboard.Key, startDir string, directory []fs.FileInfo, coordinates Coordinates, char rune) (string, []fs.FileInfo, Coordinates) {
+func ExecuteComandsOnKeystroke(key keyboard.Key, char rune, data *Data) {
 	switch {
+
+	case key == keyboard.KeyArrowDown || key == keyboard.KeyArrowUp:
+		data.list.UpDown(key)
 	case key == keyboard.KeyArrowLeft:
-		startDir, directory, coordinates = ExitDirectory(startDir, coordinates)
-
-	case key == keyboard.KeyArrowUp:
-		if len(directory) < 1 {
-			break
-		}
-		coordinates = GoUp(coordinates, directory)
-
-	case key == keyboard.KeyArrowDown:
-
-		if len(directory) < 1 {
-
-			break
-		}
-		coordinates = GoDown(coordinates, directory)
-
+		ExitDirectory(data)
 	case key == keyboard.KeyArrowRight:
-		startDir, coordinates, directory = EnterDirectory(startDir, coordinates, directory)
-
+		if len(data.directory) < 1 {
+			return
+		}
+		EnterDirectory(data)
 	case char == 'n':
-		directory, coordinates = NewFolder(directory, coordinates, startDir)
+		NewFolder(data)
 
 	case char == 'm':
-		directory, coordinates = NewFile(directory, coordinates, startDir)
+		NewFile(data)
 
 	case char == 'r':
-		directory, coordinates = Rename(directory, coordinates, startDir)
+		Rename(data)
 
 	case char == 'c':
 		if len(SelectedForCopy) > 1 {
 			SelectedForCopy = ""
 		}
-		SelectedForCut = UpdatePath(startDir, coordinates.selectedName)
+		if len(data.directory) > 0 {
+			SelectedForCut = UpdatePath(data.path, data.directory[data.list.selectedIndex].Name())
+		}
 
 	case char == 'v':
 		if len(SelectedForCut) > 1 {
 			SelectedForCut = ""
 		}
-		SelectedForCopy = UpdatePath(startDir, coordinates.selectedName)
-
+		if len(data.directory) > 0 {
+			SelectedForCopy = UpdatePath(data.path, data.directory[data.list.selectedIndex].Name())
+		}
 	case char == 'p':
-		if NameExists(startDir) {
+		if NameExists(data.path) {
 			ClearConsole()
 			fmt.Println("Name already exists")
 			break
 		}
-		coordinates, directory = Paste(startDir, coordinates)
+		Paste(data)
 
 	case char == 'd':
-		directory, coordinates = Delete(startDir, coordinates)
-
-	case char == 'h':
-		PrintHelp()
+		Delete(data)
+		// case char == 'h':
+		// 	PrintHelp()
 	}
-	return startDir, directory, coordinates
 }

@@ -8,27 +8,38 @@ import (
 	"strings"
 
 	"github.com/eiannone/keyboard"
-	tsize "github.com/kopoli/go-terminal-size"
 )
 
-type Coordinates struct {
-	windowFirstElemIndex int
-	selectedIndex        int
-	windowLastElemIndex  int
-	selectedName         string
+type Data struct {
+	path      string
+	directory []fs.FileInfo
+	list      *List
 }
 
-var Size, _ = tsize.GetSize()
-var WindowSize = Size.Height - 10
+func NewComponents() *Data {
+	directory := ReadFiles(".")
+	list := NewList(GetNames(directory))
+	return &Data{
+		path:      ".",
+		directory: directory,
+		list:      list,
+	}
+}
+
+func (d *Data) UpdateData(path string) {
+	d.directory = ReadFiles(path)
+	d.list.elements = GetNames(d.directory)
+}
 
 func main() {
-	RunProgram(".")
+	data := NewComponents()
+	data.list.InitialPrint()
+	RunProgram(data)
 }
 
-func RunProgram(startDir string) {
-	directory, coordinates := InitialRead(startDir)
+func RunProgram(data *Data) {
 	for char, key, _ := keyboard.GetSingleKey(); char != 'q'; {
-		startDir, directory, coordinates = ExecuteComandsOnKeystroke(key, startDir, directory, coordinates, char)
+		ExecuteComandsOnKeystroke(key, char, data)
 		char, key, _ = keyboard.GetSingleKey()
 	}
 }
@@ -46,4 +57,17 @@ func ReadText() string {
 func ReadFiles(path string) []fs.FileInfo {
 	files, _ := ioutil.ReadDir(path)
 	return files
+}
+
+func InitialRead(path string) []fs.FileInfo {
+
+	return ReadFiles(path)
+}
+
+func GetNames(directory []fs.FileInfo) []string {
+	var names []string
+	for i := 0; i < len(directory); i++ {
+		names = append(names, directory[i].Name())
+	}
+	return names
 }
