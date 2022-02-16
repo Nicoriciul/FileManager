@@ -52,7 +52,7 @@ func ExecuteComandsOnKeystroke(key keyboard.Key, char rune, data *Data) {
 
 	case char == 'd':
 		Delete(data)
-		// case char == 'h':
-		// 	PrintHelp()
+	case char == 'h':
+		PrintHelp()
 	}
 }

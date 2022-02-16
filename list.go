@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 
 	"github.com/eiannone/keyboard"
 	tsize "github.com/kopoli/go-terminal-size"
@@ -203,15 +202,6 @@ func PrintOnLine(name string, line int) {
 	fmt.Print(name)
 }
 
-func GetFullText(input string, fileSize string, maxLength int) string {
-
-	if len(input)+len(fileSize)+5 >= maxLength {
-		extraText := len(input) + len(fileSize) - maxLength
-		input = input[0:len(input)-extraText-8] + "..."
-	}
-	availableSpace := maxLength - len(input) - len(fileSize)
-	return input + strings.Repeat(" ", availableSpace) + fileSize + " KB"
-}
 func PrintHelp() {
 	colorReset := "\033[0m"
 	colorRed := "\033[31m"
